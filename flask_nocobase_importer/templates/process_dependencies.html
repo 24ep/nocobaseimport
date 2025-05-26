@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h2>Step 2: Process Dependencies for '{{ selected_collection }}'</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class=flashes>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  {% if dependency_statuses %}
+    <h3>Dependency Processing Status:</h3>
+    <ul>
+    {% for dep_name, status in dependency_statuses.items() %}
+      <li>
+        <strong>{{ dep_name.replace("_", " ").title() }}:</strong>
+        {% if status.success and not status.errors %}
+          <span style="color: green;">✅ Success ({{ status.count }} rows processed/upserted)</span>
+        {% elif status.success and status.errors %}
+          <span style="color: orange;">⚠️ Success with validation issues ({{ status.count }} rows processed/upserted)</span>
+          <p>Validation Errors (affecting source data for this dependency, not necessarily the main table):</p>
+          <pre>{{ status.errors | tojson(indent=2) }}</pre>
+        {% else %}
+          <span style="color: red;">❌ Failed</span>
+          {% if status.errors and status.errors is string %} <!-- Critical error string -->
+             <p>Critical Error: {{ status.errors }}</p>
+          {% elif status.errors %} <!-- error_df json -->
+            <p>Errors from source data validation:</p>
+            <pre>{{ status.errors | tojson(indent=2) }}</pre>
+          {% endif %}
+        {% endif %}
+      </li>
+    {% endfor %}
+    </ul>
+    
+    {% if all_success %}
+      <p style="color: green;">All dependencies processed successfully!</p>
+      <a href="{{ url_for('step3_validate_data_form') }}">Proceed to Validate Data &raquo;</a>
+    {% elif not dependency_statuses %} {# This case might be redundant due to the outer if #}
+      <p>No dependencies defined or required for this collection.</p>
+      <a href="{{ url_for('step3_validate_data_form') }}">Proceed to Validate Data &raquo;</a>
+    {% else %}
+      <p style="color: orange;">Some dependencies did not process successfully or had validation errors. Review the messages above. You can still proceed, but the data might be incomplete for related fields.</p>
+      <a href="{{ url_for('step3_validate_data_form') }}">Proceed to Validate Data (with potential issues) &raquo;</a>
+    {% endif %}
+  {% else %}
+    <p>No dependencies were configured or found to process for this collection.</p>
+    <a href="{{ url_for('step3_validate_data_form') }}">Proceed to Validate Data &raquo;</a>
+  {% endif %}
+  <br><br>
+  <!-- "Start New Import" in header (base.html) serves as back to step 1 -->
+  <!-- No specific "Back to Step 1" needed here if header link is clear enough -->
+  <p><a href="{{ url_for('reset_and_start') }}">Or, Start a completely new import (clears all data)</a></p>
+
+{% endblock %}

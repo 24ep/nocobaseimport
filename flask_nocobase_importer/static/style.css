@@ -1,0 +1,162 @@
+body {
+    font-family: sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+    color: #333;
+}
+
+.container {
+    width: 80%;
+    margin: auto;
+    overflow: hidden;
+    padding: 0 20px;
+    background-color: #fff;
+    box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    min-height: 100vh; /* Ensure container takes full viewport height */
+}
+
+header {
+    background: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+    border-bottom: #0779e4 3px solid;
+}
+
+header h1 {
+    margin: 0;
+}
+
+header a {
+    color: #fff;
+    text-decoration: none;
+    padding: 0 10px;
+}
+
+nav a {
+    color: #fff; /* Ensure nav links in header are white */
+    text-decoration: none;
+    padding: 5px 10px;
+    margin: 0 5px;
+    border-radius: 3px;
+}
+
+nav a:hover {
+    background-color: #555;
+}
+
+
+main {
+    padding: 20px 0;
+}
+
+footer {
+    text-align: center;
+    padding: 20px;
+    background: #333;
+    color: #fff;
+    margin-top: 20px; /* Pushes footer down */
+}
+
+.flashes {
+    list-style: none;
+    padding: 0; /* Remove default padding from ul */
+    margin-bottom: 15px; /* Add some margin below flashes */
+}
+
+/* .flashes li and .alert are combined for simplicity */
+.alert {
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+.alert-success { /* Matches .flashes .success if category is 'success' */
+    color: #155724;
+    background-color: #d4edda;
+    border-color: #c3e6cb;
+}
+
+.alert-error { /* Matches .flashes .error */
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+.alert-warning { /* Matches .flashes .warning */
+    color: #856404;
+    background-color: #fff3cd;
+    border-color: #ffeeba;
+}
+
+.alert-info { /* Matches .flashes .info */
+    color: #0c5460;
+    background-color: #d1ecf1;
+    border-color: #bee5eb;
+}
+
+form div {
+    margin-bottom: 15px; /* Increased margin for form elements */
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold; /* Make labels bolder */
+}
+
+input[type="file"],
+input[type="text"],
+select {
+    padding: 10px; /* Increased padding */
+    width: calc(100% - 22px); /* Account for padding and border */
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-sizing: border-box; 
+}
+
+button, input[type="submit"] {
+    background: #0779e4; /* Primary button color */
+    color: #fff;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1em; /* Ensure button text is readable */
+}
+
+button:hover, input[type="submit"]:hover {
+    background: #055aab; /* Darker shade on hover */
+}
+
+pre {
+    background-color: #eee;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    border: 1px solid #ddd; /* Added border */
+}
+
+h1, h2, h3 {
+    color: #333; /* Consistent heading color */
+}
+
+ul { /* Basic styling for lists if needed */
+    line-height: 1.8;
+}
+
+li {
+    margin-bottom: 8px; /* Spacing for list items */
+}
+
+a { /* General link styling */
+    color: #0779e4;
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
