@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>{{ title | default('NocoBase Importer', true) }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Removed inline style block -->
+  </head>
+  <body>
+    <div class="container"> <!-- Added container -->
+      <header>
+        <!-- Title is now part of the main H1, link styling handled by CSS -->
+        <h1><a href="{{ url_for('index') }}">{{ title | default('NocoBase Importer', true) }}</a></h1>
+        <nav>
+          <a href="{{ url_for('reset_and_start') }}">Start New Import (Clear Session)</a>
+        </nav>
+      </header>
+      <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flashes"> <!-- Ensured this is a div -->
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }}">{{ message }}</div> <!-- Ensured this matches CSS -->
+            {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </main>
+      <footer>
+        <p>&copy; 2024 NocoBase Importer Project</p>
+      </footer>
+    </div> <!-- End container -->
+    <!-- Future JS links can go here -->
+  </body>
+</html>

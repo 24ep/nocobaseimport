@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h2>Welcome to the NocoBase Data Importer!</h2>
+  
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <ul class=flashes>
+      {% for message in messages %}
+        <li style="color: red;">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  <p>Step 1: File upload and configuration.</p>
+  
+  <form method="POST" action="{{ url_for('upload_config') }}" enctype="multipart/form-data">
+    <div>
+      <label for="file">Choose Excel file (.xlsx, .xls):</label>
+      <input type="file" name="file" id="file" required>
+    </div>
+    <br>
+    <div>
+      <label for="collection">Select Target Collection:</label>
+      <select name="collection" id="collection" required>
+        {% if collections %}
+          {% for collection in collections %}
+            <option value="{{ collection }}">{{ collection }}</option>
+          {% endfor %}
+        {% else %}
+          <option value="" disabled>No collections found or error loading collections.</option>
+        {% endif %}
+      </select>
+    </div>
+    <br>
+    <div>
+      <button type="submit">Upload and Configure</button>
+    </div>
+  </form>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Import Job Progress</h2>
+<p><strong>Job ID:</strong> {{ job_id }}</p>
+<p><strong>Status:</strong> <span id="job_status">Waiting for updates...</span></p>
+<p><strong>Progress:</strong> <span id="job_progress">0</span>%</p>
+
+<div style="width: 100%; background-color: #ddd;">
+  <div id="progress_bar" style="width: 0%; height: 30px; background-color: #4CAF50; text-align: center; line-height: 30px; color: white;">
+    0%
+  </div>
+</div>
+
+<h4>Logs:</h4>
+<pre id="job_logs" style="height: 200px; overflow-y: scroll; border: 1px solid #ccc; padding: 5px; white-space: pre-wrap;"></pre>
+
+<h4>Results/Errors (when complete):</h4>
+<div id="job_results"></div>
+
+<div id="next_step_button_container" style="display:none; margin-top: 20px;">
+    <!-- Button will be dynamically inserted here -->
+</div>
+
+<script>
+    const jobId = "{{ job_id }}";
+    const statusElement = document.getElementById('job_status');
+    const progressElement = document.getElementById('job_progress');
+    const progressBarElement = document.getElementById('progress_bar');
+    const logsElement = document.getElementById('job_logs');
+    const resultsElement = document.getElementById('job_results');
+    const nextStepContainer = document.getElementById('next_step_button_container');
+    let currentLogLength = 0;
+    let pollingInterval; // To store the interval ID
+
+    function fetchJobStatus() {
+        fetch(`/import_job_status/${jobId}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.is_failed && data.error_message && data.status === 'failed') {
+                    // If RQ marks as failed (is_failed) and there's an exc_info (error_message)
+                    statusElement.textContent = `Critically Failed: ${data.status}`;
+                } else {
+                    statusElement.textContent = data.status || 'Unknown';
+                }
+                const progress = data.progress || 0;
+                progressElement.textContent = progress;
+                progressBarElement.style.width = progress + '%';
+                progressBarElement.textContent = progress + '%';
+
+                if (data.logs && data.logs.length > currentLogLength) {
+                    const newLogs = data.logs.slice(currentLogLength).join('\n');
+                    logsElement.textContent += (logsElement.textContent ? '\n' : '') + newLogs;
+                    logsElement.scrollTop = logsElement.scrollHeight; // Auto-scroll
+                    currentLogLength = data.logs.length;
+                }
+
+                // Stop polling if job is finished or failed
+                if (data.is_finished || data.is_failed || data.status === 'NOT_FOUND') {
+                    clearInterval(pollingInterval); // Stop polling
+                    resultsElement.innerHTML = ''; // Clear previous results
+
+                    if(data.results) {
+                        let resultsHtml = '<ul>';
+                        for (const [key, value] of Object.entries(data.results)) {
+                            resultsHtml += `<li><strong>${key.replace("_", " ").title()}:</strong> `;
+                            if (typeof value === 'object' && value !== null) {
+                                resultsHtml += `Success: ${value.success}, Count: ${value.count}`;
+                                if (value.errors) {
+                                    // Attempt to parse errors if it's a JSON string
+                                    let errorContent = value.errors;
+                                    try {
+                                        const parsedErrors = JSON.parse(value.errors);
+                                        errorContent = JSON.stringify(parsedErrors, null, 2);
+                                    } catch (e) {
+                                        // If not a valid JSON string, display as is
+                                    }
+                                    resultsHtml += `<br><pre style="color:red;">Errors: ${errorContent}</pre>`;
+                                }
+                            } else {
+                                resultsHtml += JSON.stringify(value);
+                            }
+                            resultsHtml += '</li>';
+                        }
+                        resultsHtml += '</ul>';
+                        resultsElement.innerHTML = resultsHtml;
+                    } else if (data.error_message) {
+                         resultsElement.innerHTML = `<p style="color:red;">Error: ${data.error_message}</p>`;
+                    } else if (data.status === 'NOT_FOUND') {
+                         resultsElement.innerHTML = `<p style="color:red;">Job not found. It might have expired or was never created.</p>`;
+                    }
+
+
+                    if (data.status === 'SUCCESS' || data.status === 'PARTIAL_FAILURE') {
+                        if (data.job_type === 'dependency_processing') {
+                            nextStepContainer.innerHTML = `<a href="{{ url_for('validate_data') }}" class="button">Proceed to Validate Data (Step 3)</a>`;
+                            nextStepContainer.style.display = 'block';
+                        } else if (data.job_type === 'validation') {
+                            let results = data.results || {};
+                            let passed_count = results.passed_df_count !== undefined ? results.passed_df_count : 0; // Ensure count is a number
+                            if (passed_count > 0) {
+                                nextStepContainer.innerHTML = `<a href="{{ url_for('upload_data_form') }}" class="button">Proceed to Upload Options (Step 4)</a>`;
+                            } else {
+                                nextStepContainer.innerHTML = `<p>Validation complete, but no data passed. <a href="{{url_for('reset_and_start')}}">Start Over</a></p>`;
+                            }
+                            nextStepContainer.style.display = 'block';
+                        }
+                    } else if (data.status === 'FAILURE' || data.is_failed) {
+                        progressBarElement.style.backgroundColor = 'red'; // Indicate failure on progress bar
+                        if (data.job_type === 'upload') {
+                            nextStepContainer.innerHTML = `<p style="color:red;">Upload failed. Please check logs. <a href="{{ url_for('reset_and_start') }}" class="button">Start New Import</a></p>`;
+                        } else { // For other job types like dependency or validation
+                            nextStepContainer.innerHTML = `<p style="color:red;">Job failed. <a href="{{url_for('reset_and_start')}}">Start Over</a></p>`;
+                        }
+                        nextStepContainer.style.display = 'block';
+                    } else if (data.status === 'SUCCESS' || data.status === 'PARTIAL_FAILURE') { // Combined SUCCESS and PARTIAL_FAILURE for button logic
+                        if (data.job_type === 'dependency_processing') {
+                            nextStepContainer.innerHTML = `<a href="{{ url_for('validate_data') }}" class="button">Proceed to Validate Data (Step 3)</a>`;
+                            nextStepContainer.style.display = 'block';
+                        } else if (data.job_type === 'validation') {
+                            let results = data.results || {};
+                            let passed_count = results.passed_df_count !== undefined ? results.passed_df_count : 0;
+                            if (passed_count > 0) {
+                                nextStepContainer.innerHTML = `<a href="{{ url_for('upload_data_form') }}" class="button">Proceed to Upload Options (Step 4)</a>`;
+                            } else {
+                                nextStepContainer.innerHTML = `<p>Validation complete, but no data passed. <a href="{{url_for('reset_and_start')}}">Start Over</a></p>`;
+                            }
+                            nextStepContainer.style.display = 'block';
+                        } else if (data.job_type === 'upload') {
+                            let results = data.results || {};
+                            let message = results.message || "Upload completed successfully!";
+                            nextStepContainer.innerHTML = `<p>${message} <a href="{{ url_for('reset_and_start') }}" class="button">Start New Import</a></p>`;
+                            nextStepContainer.style.display = 'block';
+                        }
+                    }
+                    return; 
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching job status:', error);
+                statusElement.textContent = 'Error fetching status. See console.';
+                clearInterval(pollingInterval); // Stop polling on error
+            });
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        fetchJobStatus(); // Initial fetch
+        pollingInterval = setInterval(fetchJobStatus, 3000); // Then poll every 3 seconds
+    });
+</script>
+{% endblock %}

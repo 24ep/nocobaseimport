@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  web:
+    build: . # Assumes Dockerfile is in the same directory as docker-compose.yml
+    container_name: nocobase_importer_web
+    ports:
+      - "5000:5000" # Exposes port 5000 to the host
+    volumes:
+      # Mounts the flask_nocobase_importer app code for development (optional for production)
+      # - ./flask_nocobase_importer:/app/flask_nocobase_importer 
+      - ./persistent_uploads:/app/flask_nocobase_importer/uploads # Persistent uploads
+    environment:
+      # Environment variables will be loaded from .env file by default by docker-compose
+      # Alternatively, list them here or ensure they are in .env
+      - FLASK_APP=${FLASK_APP}
+      - FLASK_RUN_HOST=${FLASK_RUN_HOST} # Will be 0.0.0.0 from Dockerfile or .env
+      - FLASK_RUN_PORT=${FLASK_RUN_PORT} # Will be 5000 from Dockerfile or .env
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
+      - FLASK_UPLOAD_FOLDER=${FLASK_UPLOAD_FOLDER} # e.g., /app/flask_nocobase_importer/uploads
+      - FLASK_SESSION_COOKIE_SECURE=${FLASK_SESSION_COOKIE_SECURE}
+      - DB_HOST=${DB_HOST} # Could be a service name like 'db' if PostgreSQL was also in compose
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0 # Points to the redis service
+    depends_on:
+      - redis
+    # If using gunicorn as CMD in Dockerfile, these FLASK_RUN_* vars are less relevant for web service startup
+    # The CMD in Dockerfile for web service is:
+    # CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "flask_nocobase_importer.app:app"]
+
+  redis:
+    image: "redis:alpine"
+    container_name: nocobase_importer_redis
+    ports:
+      - "6379:6379" # Optional: expose Redis port to host for debugging
+    volumes:
+      - redis_data:/data # Persistent Redis data
+
+  worker:
+    build: . # Uses the same Dockerfile as web
+    container_name: nocobase_importer_worker
+    command: flask rq worker -u redis://redis:6379/0 default # Runs the RQ worker, ensure flask CLI is available
+    # Alternative command if flask CLI not directly usable or app context issues:
+    # command: python -m flask rq worker -u redis://redis:6379/0 default
+    volumes:
+      # Mounts the flask_nocobase_importer app code for development (optional for production)
+      # - ./flask_nocobase_importer:/app/flask_nocobase_importer
+      - ./persistent_uploads:/app/flask_nocobase_importer/uploads # Worker also needs access to uploads
+    environment:
+      # Worker also needs environment variables, especially database and Redis config
+      - FLASK_APP=${FLASK_APP} # Required for flask rq worker
+      - FLASK_SECRET_KEY=${FLASK_SECRET_KEY} # Tasks might access session indirectly or app context
+      - FLASK_UPLOAD_FOLDER=${FLASK_UPLOAD_FOLDER}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+      - web # Optional: ensure web is up, though worker is independent after task enqueue
+
+volumes:
+  redis_data: # Defines a named volume for Redis persistence

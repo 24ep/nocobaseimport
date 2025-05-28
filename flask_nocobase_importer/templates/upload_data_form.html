@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h2>Step 4: Upload Data for '{{ selected_collection }}'</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class=flashes>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  {% if passed_df_empty %}
+    <p style="color:orange;">Warning: There is no valid data to upload. Please go back and check the validation step.</p>
+    <p><a href="{{ url_for('validate_data') }}">&laquo; Back to Validate Data</a></p>
+  {% else %}
+    <form method="POST" action="{{ url_for('execute_upload') }}">
+        <div>
+            <label><strong>Upload Mode:</strong></label><br>
+            <input type="radio" name="upload_mode" value="insert" id="mode_insert" checked> 
+            <label for="mode_insert">Insert</label><br>
+            
+            <input type="radio" name="upload_mode" value="update" id="mode_update"> 
+            <label for="mode_update">Update</label><br>
+            
+            <input type="radio" name="upload_mode" value="insert on duplicate update" id="mode_upsert"> 
+            <label for="mode_upsert">Insert on Duplicate Update</label><br>
+        </div>
+        <br>
+        <div id="update_options" style="display:none;">
+            <label for="pk_column">Primary Key Column (for Update):</label>
+            <select name="pk_column" id="pk_column">
+                {% if collection_columns %}
+                    {% for col in collection_columns %}
+                    <option value="{{ col }}">{{ col }}</option>
+                    {% endfor %}
+                {% else %}
+                    <option value="" disabled>No columns available</option>
+                {% endif %}
+            </select>
+        </div>
+
+        <div id="upsert_options" style="display:none;">
+            <label for="conflict_column">Conflict Column (for Upsert):</label>
+            <select name="conflict_column" id="conflict_column">
+                 {% if collection_columns %}
+                    {% for col in collection_columns %}
+                    <option value="{{ col }}">{{ col }}</option>
+                    {% endfor %}
+                {% else %}
+                    <option value="" disabled>No columns available</option>
+                {% endif %}
+            </select>
+        </div>
+        <br>
+        <button type="submit">🔥 Start Final Upload</button>
+    </form>
+    <script>
+        document.querySelectorAll('input[name="upload_mode"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                document.getElementById('update_options').style.display = (this.value === 'update') ? 'block' : 'none';
+                document.getElementById('upsert_options').style.display = (this.value === 'insert on duplicate update') ? 'block' : 'none';
+                
+                // Optional: Clear selection or set default for hidden selects
+                if (this.value !== 'update') {
+                    document.getElementById('pk_column').selectedIndex = 0; 
+                }
+                if (this.value !== 'insert on duplicate update') {
+                    document.getElementById('conflict_column').selectedIndex = 0;
+                }
+            });
+        });
+        // Trigger change on load to set initial state based on checked radio
+        const checkedRadio = document.querySelector('input[name="upload_mode"]:checked');
+        if (checkedRadio) {
+            checkedRadio.dispatchEvent(new Event('change'));
+        }
+    </script>
+    <hr>
+    <p><a href="{{ url_for('validate_data') }}">&laquo; Back to Validate Data (Step 3)</a></p>
+  {% endif %}
+   <!-- "Start New Import (Clear Session)" in base.html handles this -->
+{% endblock %}
