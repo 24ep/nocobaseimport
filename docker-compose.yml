@@ -49,9 +49,9 @@ services:
   worker:
     build: . # Uses the same Dockerfile as web
     container_name: nocobase_importer_worker
-    command: python -m flask rq worker -u redis://redis:6379/0 default
+    command: python -m flask rq worker default
     # Alternative command if flask CLI not directly usable or app context issues:
-    # command: python -m flask rq worker -u redis://redis:6379/0 default
+    # command: python -m flask rq worker default
     volumes:
       # Mounts the flask_nocobase_importer app code for development (optional for production)
       # - ./flask_nocobase_importer:/app/flask_nocobase_importer
