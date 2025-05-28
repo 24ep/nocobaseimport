@@ -58,24 +58,7 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/')
-def index():
-    db = DatabaseManager() 
-    try:
-        collections_list = get_collections(db)
-    except Exception as e:
-        flash(f"Error connecting to database or fetching collections: {e}", "error")
-        collections_list = []
-    # Session data is now cleared by /reset_and_start or by the global error handler
-    # db = DatabaseManager() 
-    # try:
-    #     collections_list = get_collections(db)
-    # except Exception as e:
-    #     flash(f"Error connecting to database or fetching collections: {e}", "error")
-    #     collections_list = []
-    # return render_template('index.html', title='NocoBase Importer - Step 1', collections=collections_list)
-
-@app.route('/reset_and_start')
+@app.route('/reset_and_start') # This is the functional reset_and_start route
 def reset_and_start():
     # Clear all relevant session keys
     keys_to_clear = [
