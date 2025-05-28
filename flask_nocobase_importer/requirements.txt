@@ -1,0 +1,10 @@
+Flask
+psycopg2-binary
+pandas
+openpyxl
+pyarrow
+numpy
+gunicorn
+Flask-Talisman
+Flask-RQ2
+redis

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h2>Step 3: Validate Data for '{{ selected_collection }}'</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class=flashes>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+
+  <h3>Data Validation Results for: {{ selected_collection }}</h3>
+  <p>Passed Data Rows: {{ passed_df_count }}</p>
+  <p>Error Data Rows: {{ error_df_count }}</p>
+  
+  <h4>Unresolved Foreign Key Values (from source data):</h4>
+  {% if unresolved_values_json and unresolved_values_json != '{}' %}
+    <pre>{{ unresolved_values_json | tojson(indent=2) }}</pre>
+  {% else %}
+    <p>No unresolved foreign key values found, or data was not applicable.</p>
+  {% endif %}
+
+  {% if error_df_count > 0 %}
+    <p><strong>Warning:</strong> There are {{error_df_count}} row(s) with errors. These rows will be stored separately and will not be uploaded. Only valid data ({{passed_df_count}} rows) will proceed to the next step.</p>
+    <!-- Optionally, add a link to download/view error_df here later -->
+  {% endif %}
+  
+  {% if passed_df_count > 0 %}
+    <p><a href="{{ url_for('step4_upload_data_form') }}">Proceed to Upload Valid Data ({{ passed_df_count }} rows) &raquo;</a></p>
+  {% else %}
+    <p>No data passed validation. Cannot proceed to upload.</p>
+  {% endif %}
+  
+  <hr>
+  <p><a href="{{ url_for('process_dependencies') }}">&laquo; Back to Step 2 (Process Dependencies)</a></p>
+  <!-- The "Start New Import (Clear Session)" link in base.html handles the main "start over" functionality -->
+  <!-- Removing the redundant "Start Over with a New File" link here -->
+
+{% endblock %}

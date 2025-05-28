@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <h2>Step 4: Upload Status for '{{ session.get("selected_collection", "N/A") }}'</h2>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul class=flashes>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
+  
+  <hr>
+  <p><a href="{{ url_for('index') }}">Start a New Import &laquo;</a></p>
+  
+  {% if session.get('passed_df_path') %}
+  <p><a href="{{ url_for('upload_data_form') }}">Go Back to Upload Options (Step 4) &laquo;</a></p>
+  {% elif session.get('processed_df_path') %}
+  <p><a href="{{ url_for('validate_data') }}">Go Back to Validate Data (Step 3) &laquo;</a></p>
+  {% elif session.get('uploaded_filepath') %}
+   <p><a href="{{ url_for('process_dependencies') }}">Go Back to Process Dependencies (Step 2) &laquo;</a></p>
+  {% endif %}
+
+{% endblock %}
