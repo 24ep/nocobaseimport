@@ -17,16 +17,23 @@ services:
       - FLASK_RUN_HOST=${FLASK_RUN_HOST} # Will be 0.0.0.0 from Dockerfile or .env
       - FLASK_RUN_PORT=${FLASK_RUN_PORT} # Will be 5000 from Dockerfile or .env
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY}
-      - FLASK_UPLOAD_FOLDER=${FLASK_UPLOAD_FOLDER} # e.g., /app/flask_nocobase_importer/uploads
+      - FLASK_UPLOAD_FOLDER=/app/flask_nocobase_importer/uploads # Crucial update
       - FLASK_SESSION_COOKIE_SECURE=${FLASK_SESSION_COOKIE_SECURE}
-      - DB_HOST=${DB_HOST} # Could be a service name like 'db' if PostgreSQL was also in compose
-      - DB_PORT=${DB_PORT}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_HOST=importer_db # Service name of the new importer database
+      - DB_PORT=5432        # Port inside the Docker network for PostgreSQL
+      - DB_NAME=${IMPORTER_DB_NAME}
+      - DB_USER=${IMPORTER_DB_USER}
+      - DB_PASSWORD=${IMPORTER_DB_PASSWORD}
       - REDIS_URL=redis://redis:6379/0 # Points to the redis service
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_SECURE='False'
     depends_on:
       - redis
+      - minio
+      - importer_db
     # If using gunicorn as CMD in Dockerfile, these FLASK_RUN_* vars are less relevant for web service startup
     # The CMD in Dockerfile for web service is:
     # CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "flask_nocobase_importer.app:app"]
@@ -53,16 +60,65 @@ services:
       # Worker also needs environment variables, especially database and Redis config
       - FLASK_APP=${FLASK_APP} # Required for flask rq worker
       - FLASK_SECRET_KEY=${FLASK_SECRET_KEY} # Tasks might access session indirectly or app context
-      - FLASK_UPLOAD_FOLDER=${FLASK_UPLOAD_FOLDER}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_NAME=${DB_NAME}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - FLASK_UPLOAD_FOLDER=/app/flask_nocobase_importer/uploads # Crucial update
+      - DB_HOST=importer_db # Service name of the new importer database
+      - DB_PORT=5432        # Port inside the Docker network for PostgreSQL
+      - DB_NAME=${IMPORTER_DB_NAME}
+      - DB_USER=${IMPORTER_DB_USER}
+      - DB_PASSWORD=${IMPORTER_DB_PASSWORD}
       - REDIS_URL=redis://redis:6379/0
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET_NAME=${MINIO_BUCKET_NAME}
+      - MINIO_SECURE='False'
     depends_on:
       - redis
-      - web # Optional: ensure web is up, though worker is independent after task enqueue
+      - minio 
+      - importer_db
+      # - web # Optional: ensure web is up, though worker is independent after task enqueue
+
+  minio:
+    image: minio/minio:latest
+    container_name: nocobase_importer_minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000" # API
+      - "9001:9001" # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY} # Reusing from .env
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY} # Reusing from .env
+    volumes:
+      - minio_data:/data
+
+  importer_db:
+    image: postgres:13-alpine
+    container_name: nocobase_importer_app_db
+    ports:
+      - "5433:5432" # Expose on host port 5433 to avoid conflict if another Postgres runs on 5432
+    environment:
+      POSTGRES_USER: ${IMPORTER_DB_USER:-importer_user}
+      POSTGRES_PASSWORD: ${IMPORTER_DB_PASSWORD:-importer_secret_password}
+      POSTGRES_DB: ${IMPORTER_DB_NAME:-importer_app_data}
+    volumes:
+      - importer_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  sample_nocobase_db:
+    image: postgres:13-alpine
+    container_name: nocobase_importer_sample_target_db
+    ports:
+      - "5434:5432" # Expose on host port 5434
+    environment:
+      POSTGRES_USER: ${SAMPLE_NOCOBASE_DB_USER:-sample_user}
+      POSTGRES_PASSWORD: ${SAMPLE_NOCOBASE_DB_PASSWORD:-sample_password}
+      POSTGRES_DB: ${SAMPLE_NOCOBASE_DB_NAME:-sample_nocobase_data}
+    volumes:
+      - sample_nocobase_db_data:/var/lib/postgresql/data
+    restart: unless-stopped
 
 volumes:
   redis_data: # Defines a named volume for Redis persistence
+  minio_data: # Defines a named volume for MinIO data
+  importer_db_data: # Defines a named volume for Importer App DB data
+  sample_nocobase_db_data: # Defines a named volume for Sample NocoBase DB data

@@ -275,7 +275,7 @@ def validate_dataframe(df, field_defs, db: 'DatabaseManager'):
                 invalid_mask = ~cleaned_lower.isin(allowed_set)
                 for idx in cleaned[invalid_mask].index:
                     v = cleaned.at[idx]
-                    unresolved_values[col][v] = 1
+                    unresolved_values[col][v] = 1 # Changed from += 1
                     error_msg = f"Invalid references in {col}: {{{v}}} not found in {target}"
                     df.at[idx, 'errors'].append(error_msg)
             else: 
@@ -286,7 +286,7 @@ def validate_dataframe(df, field_defs, db: 'DatabaseManager'):
                     missing = [v for v in values if v.lower() not in allowed_set]
                     if missing:
                         for m in missing:
-                            unresolved_values[col][m] = 1
+                            unresolved_values[col][m] = 1 # Changed from += 1
                         error_msg = f"Invalid references in {col}: {set(missing)} not found in {target}"
                         df.at[idx, 'errors'].append(error_msg)
 
@@ -541,27 +541,18 @@ def _do_upsert(cursor, table_name: str, df: pd.DataFrame, conflict_col: str) -> 
 
     cols = list(df.columns)
     col_idents  = [sql.Identifier(c) for c in cols]
-    update_cols = [c for c in cols if c != conflict_col]
+    update_cols = [c for c in cols if c != conflict_col] # These are columns to be updated if conflict occurs
     
-    set_clause_parts = []
-    if update_cols:
-        set_clause_parts.extend([
+    if update_cols: # If there are columns to update (other than the conflict column)
+        set_clause = sql.SQL(", ").join(
             sql.SQL("{} = EXCLUDED.{}").format(sql.Identifier(c), sql.Identifier(c))
-            for c in update_cols if c != 'updated_at' # Avoid double-adding updated_at
-        ])
-    
-    # Always try to set updated_at if the column exists in the table (implicitly handled by EXCLUDED.* or explicitly)
-    # For NocoBase, 'updated_at' is typically managed by the database/ORM or triggers.
-    # If it must be set manually on conflict:
-    if 'updated_at' in cols and 'updated_at' != conflict_col :
-         set_clause_parts.append(sql.SQL("updated_at = CURRENT_TIMESTAMP"))
-
-    if set_clause_parts:
+            for c in update_cols 
+        )
         conflict_clause = sql.SQL(" ON CONFLICT ({}) DO UPDATE SET {}").format(
             sql.Identifier(conflict_col),
-            sql.SQL(", ").join(set_clause_parts)
+            set_clause
         )
-    else: # No columns to update means either only conflict_col or conflict_col + created_at/updated_at
+    else: # If only the conflict column is present, or no other columns are updatable
         conflict_clause = sql.SQL(" ON CONFLICT ({}) DO NOTHING").format(
             sql.Identifier(conflict_col)
         )
@@ -576,7 +567,7 @@ def _do_upsert(cursor, table_name: str, df: pd.DataFrame, conflict_col: str) -> 
     if not data:
         return 0
 
-    execute_values(cursor, insert_sql, data, page_size=len(data)) 
+    execute_values(cursor, insert_sql, data) # page_size removed
     return cursor.rowcount
 
 def process_dependency(
@@ -641,8 +632,8 @@ def process_dependency(
             cur.close()
             conn.close()
         
-        # If upsert was successful, return True, and error_df_validation (which might contain earlier validation issues)
-        return True, error_df_validation if error_df_validation is not None and not error_df_validation.empty else None, rowcount
+        # If upsert was successful, return True, and None for error_df (aligning with Streamlit)
+        return True, None, rowcount
 
     except Exception as e:
         logging.error(f"Error processing dependency '{dep_name}': {e}")
@@ -684,9 +675,9 @@ def make_extension(row, num_col, ext_col):
     if num and ext:
         return f"{num}-{ext}"
     elif num:
-        return num
+        return num # num is already a string here or None
     elif ext: 
-        return f"-{ext}" 
+        return ext # Align with Streamlit: return just the extension string
     else:
         return None
 

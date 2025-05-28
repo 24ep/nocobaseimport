@@ -1,162 +1,215 @@
+/* General Reset / Base */
 body {
-    font-family: sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     line-height: 1.6;
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
-    color: #333;
+    background-color: #f8f9fa; /* Lighter grey background */
+    color: #212529; /* Darker text for better contrast */
+    font-size: 16px; /* Ensure a readable base font size */
 }
 
 .container {
     width: 80%;
-    margin: auto;
+    max-width: 1200px; /* Max width for large screens */
+    margin: 20px auto; /* Add some top/bottom margin */
     overflow: hidden;
-    padding: 0 20px;
+    padding: 20px 30px; /* Increased padding */
     background-color: #fff;
-    box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    min-height: 100vh; /* Ensure container takes full viewport height */
+    box-shadow: 0 2px 15px rgba(0,0,0,0.08); /* Softer shadow */
+    border-radius: 8px; /* Rounded corners for the container */
+    min-height: calc(100vh - 40px); /* Adjust min-height considering body margin */
 }
 
+/* Header */
 header {
-    background: #333;
+    background: #343a40; /* Dark grey, less stark than black */
     color: #fff;
-    padding: 1rem 0;
+    padding: 1.5rem 0; /* Increased padding */
     text-align: center;
-    border-bottom: #0779e4 3px solid;
+    border-bottom: #007bff 4px solid; /* Primary color accent */
+    margin: -20px -30px 0 -30px; /* Extend to container edges before padding */
+    border-top-left-radius: 8px; /* Match container rounding */
+    border-top-right-radius: 8px;
 }
 
 header h1 {
     margin: 0;
+    font-size: 2rem; /* Larger title */
 }
 
-header a {
+header a { /* For title link */
     color: #fff;
     text-decoration: none;
-    padding: 0 10px;
+}
+
+nav { /* Added nav specific styling if not already distinct */
+    margin-top: 0.5rem;
 }
 
 nav a {
-    color: #fff; /* Ensure nav links in header are white */
+    color: #f8f9fa; /* Lighter color for nav links for contrast with dark header */
     text-decoration: none;
-    padding: 5px 10px;
-    margin: 0 5px;
-    border-radius: 3px;
+    padding: 8px 15px;
+    margin: 0 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease-in-out;
 }
 
 nav a:hover {
-    background-color: #555;
+    background-color: #495057; /* Slightly darker hover for nav links */
+    text-decoration: none; /* Remove underline from nav hover */
 }
 
-
+/* Main Content */
 main {
-    padding: 20px 0;
+    padding: 25px 0; /* Increased padding */
 }
 
+/* Footer */
 footer {
     text-align: center;
-    padding: 20px;
-    background: #333;
+    padding: 25px;
+    background: #343a40; /* Match header background */
     color: #fff;
-    margin-top: 20px; /* Pushes footer down */
+    margin: 20px -30px -20px -30px; /* Extend to container edges */
+    border-bottom-left-radius: 8px; /* Match container rounding */
+    border-bottom-right-radius: 8px;
 }
 
+/* Flash Messages */
 .flashes {
-    list-style: none;
-    padding: 0; /* Remove default padding from ul */
-    margin-bottom: 15px; /* Add some margin below flashes */
+    padding: 0;
+    margin-bottom: 20px;
 }
 
-/* .flashes li and .alert are combined for simplicity */
 .alert {
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 15px 20px; /* Increased padding */
+    margin-bottom: 15px;
     border: 1px solid transparent;
-    border-radius: 4px;
+    border-radius: 5px; /* Slightly more rounded */
+    font-size: 0.95em;
 }
 
-.alert-success { /* Matches .flashes .success if category is 'success' */
-    color: #155724;
-    background-color: #d4edda;
-    border-color: #c3e6cb;
+.alert-success {
+    color: #0f5132;
+    background-color: #d1e7dd;
+    border-color: #badbcc;
 }
 
-.alert-error { /* Matches .flashes .error */
-    color: #721c24;
+.alert-error {
+    color: #842029;
     background-color: #f8d7da;
-    border-color: #f5c6cb;
+    border-color: #f5c2c7;
 }
 
-.alert-warning { /* Matches .flashes .warning */
-    color: #856404;
+.alert-warning {
+    color: #664d03;
     background-color: #fff3cd;
-    border-color: #ffeeba;
+    border-color: #ffecb5;
 }
 
-.alert-info { /* Matches .flashes .info */
-    color: #0c5460;
-    background-color: #d1ecf1;
-    border-color: #bee5eb;
+.alert-info {
+    color: #055160;
+    background-color: #cff4fc;
+    border-color: #b6effb;
 }
 
+/* Forms */
 form div {
-    margin-bottom: 15px; /* Increased margin for form elements */
+    margin-bottom: 20px; /* Consistent spacing */
 }
 
 label {
     display: block;
-    margin-bottom: 5px;
-    font-weight: bold; /* Make labels bolder */
+    margin-bottom: 8px; /* Increased space after label */
+    font-weight: 600; /* Slightly bolder */
+    color: #495057; /* Softer black for labels */
 }
 
 input[type="file"],
 input[type="text"],
 select {
-    padding: 10px; /* Increased padding */
-    width: calc(100% - 22px); /* Account for padding and border */
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    box-sizing: border-box; 
+    padding: 12px 15px; /* More padding */
+    width: calc(100% - 32px); /* Adjust for padding and border */
+    border: 1px solid #ced4da; /* Softer border */
+    border-radius: 5px;
+    box-sizing: border-box;
+    font-size: 1em;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-button, input[type="submit"] {
-    background: #0779e4; /* Primary button color */
+input[type="file"] {
+    padding: 8px 10px; /* Specific padding for file input */
+}
+
+
+input[type="file"]:focus,
+input[type="text"]:focus,
+select:focus {
+    border-color: #007bff; /* Highlight focus with primary color */
+    outline: 0;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25); /* Bootstrap-like focus shadow */
+}
+
+button, input[type="submit"], .button { /* Added .button class for consistency */
+    background-color: #007bff; /* Primary blue */
     color: #fff;
-    padding: 10px 15px;
+    padding: 12px 20px; /* Increased padding */
     border: none;
-    border-radius: 4px;
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 1em; /* Ensure button text is readable */
+    font-size: 1em;
+    text-decoration: none; /* For .button used on <a> tags */
+    display: inline-block; /* For <a> tags styled as buttons */
+    transition: background-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
-button:hover, input[type="submit"]:hover {
-    background: #055aab; /* Darker shade on hover */
+button:hover, input[type="submit"]:hover, .button:hover {
+    background-color: #0056b3; /* Darker blue on hover */
+    text-decoration: none; /* For <a> tags */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15);
 }
 
+/* Code/Log Display */
 pre {
-    background-color: #eee;
-    padding: 10px;
-    border-radius: 4px;
+    background-color: #e9ecef; /* Lighter background for pre */
+    padding: 15px; /* Increased padding */
+    border-radius: 5px;
     overflow-x: auto;
-    border: 1px solid #ddd; /* Added border */
+    border: 1px solid #dee2e6; /* Softer border */
+    font-size: 0.9em;
+    white-space: pre-wrap; /* Ensure logs wrap */
 }
 
-h1, h2, h3 {
-    color: #333; /* Consistent heading color */
+/* Headings */
+h1, h2, h3, h4 { /* Added h4 */
+    color: #343a40; /* Consistent dark heading color */
+    margin-top: 0; /* Remove default top margin for better control */
+    margin-bottom: 0.75rem; /* Consistent bottom margin */
 }
+h1 { font-size: 2.25rem; } /* Adjust sizes as needed */
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.5rem; }
+h4 { font-size: 1.25rem; }
 
-ul { /* Basic styling for lists if needed */
-    line-height: 1.8;
-}
 
-li {
-    margin-bottom: 8px; /* Spacing for list items */
-}
-
-a { /* General link styling */
-    color: #0779e4;
+/* General Link Styling (outside of nav/buttons) */
+a {
+    color: #007bff;
     text-decoration: none;
 }
 
 a:hover {
+    color: #0056b3;
     text-decoration: underline;
+}
+
+/* Progress Bar Specifics (if any additional styling needed for #progress_bar in import_job_progress.html) */
+/* The existing inline styles and JS updates for width/text are primary drivers. */
+/* This CSS can ensure base appearance or add transitions if desired. */
+#progress_bar {
+    border-radius: 4px; /* Rounded corners for progress bar */
+    transition: width 0.3s ease; /* Smooth width transition */
 }

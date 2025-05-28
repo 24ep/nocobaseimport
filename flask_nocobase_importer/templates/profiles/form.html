@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>{{ title }}</h2>
+<form method="POST" action="">
+    {{ form.hidden_tag() }} {# For CSRF token if Flask-WTF is configured for it #}
+    
+    <div>
+        {{ form.profile_name.label }}<br>
+        {{ form.profile_name(size=40, class="form-control") }}<br>
+        {% if form.profile_name.errors %}
+            <ul class="errors" style="color:red; list-style-type:none; padding-left:0;">
+                {% for error in form.profile_name.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+
+    <div>
+        {{ form.db_host.label }}<br>
+        {{ form.db_host(size=40, class="form-control") }}<br>
+        {% if form.db_host.errors %}
+            <ul class="errors" style="color:red; list-style-type:none; padding-left:0;">
+                {% for error in form.db_host.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+
+    <div>
+        {{ form.db_port.label }}<br>
+        {{ form.db_port(size=10, class="form-control") }}<br>
+        {% if form.db_port.errors %}
+            <ul class="errors" style="color:red; list-style-type:none; padding-left:0;">
+                {% for error in form.db_port.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+
+    <div>
+        {{ form.db_name.label }}<br>
+        {{ form.db_name(size=40, class="form-control") }}<br>
+        {% if form.db_name.errors %}
+            <ul class="errors" style="color:red; list-style-type:none; padding-left:0;">
+                {% for error in form.db_name.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+
+    <div>
+        {{ form.db_user.label }}<br>
+        {{ form.db_user(size=40, class="form-control") }}<br>
+        {% if form.db_user.errors %}
+            <ul class="errors" style="color:red; list-style-type:none; padding-left:0;">
+                {% for error in form.db_user.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+
+    <div>
+        {{ form.db_password.label }}<br>
+        {{ form.db_password(size=40, class="form-control") }}
+        {% if action == "Update" %}
+            <small>(Leave blank to keep current password unchanged)</small>
+        {% endif %}
+        <br>
+        {% if form.db_password.errors %}
+            <ul class="errors" style="color:red; list-style-type:none; padding-left:0;">
+                {% for error in form.db_password.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+    </div>
+    
+    <div>
+        {{ form.submit(class="button") }}
+        <a href="{{ url_for('list_profiles') }}" class="button" style="background-color: #6c757d; margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+{% endblock %}
