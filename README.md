@@ -169,9 +169,16 @@ While Docker Compose (`docker-compose up`) is the recommended way to run all ser
     This command tells the worker to connect to your Redis instance (using the `REDIS_URL` from your environment or defaulting to `redis://localhost:6379/0`) and process jobs on the `default` queue. You can list multiple queues if needed.
 
 **Troubleshooting Worker Startup:**
-*   **`Error: Could not locate a Flask application.`**: This usually means `FLASK_APP` is not set correctly or you are not in the project root directory. Verify the variable and your current path.
-*   **`Error: No such command 'rq'.`**: This typically means the virtual environment isn't activated, `Flask-RQ2` is not installed properly, or there's an issue with your Python environment's PATH. Ensure `pip install -r requirements.txt` was successful.
-*   **Connection Errors to Redis/MinIO/DB**: Ensure these services are running and accessible, and that your `.env` file has the correct connection details.
+*   **`Error: Could not locate a Flask application.`** or **`Error: No such command 'rq'.`**: 
+    These errors usually indicate that the Flask CLI cannot find your application, which prevents custom commands like `rq` from being registered.
+    *   **When using Docker Compose**: Ensure the `FLASK_APP` variable is correctly set in your `.env` file (e.g., `FLASK_APP=flask_nocobase_importer.app`). Docker Compose loads this `.env` file to configure the services, including the worker. The `Dockerfile` sets a default, but an incorrect or empty `FLASK_APP` in the `.env` file can cause issues.
+    *   **When running manually (outside Docker Compose)**: Make sure you have set the `FLASK_APP` environment variable in your current shell session (e.g., `export FLASK_APP=flask_nocobase_importer.app`) AND that you are running the `flask rq worker` command from the project's root directory (the one containing the `flask_nocobase_importer` folder).
+    *   Verify the `FLASK_APP` value matches the path to your Flask application instance (usually `filename.py:instance_name`).
+
+*   **`Error: No such command 'rq'.` (if Flask app seems to load but 'rq' is still missing)**: 
+    If `FLASK_APP` seems correct but `rq` is still not found, this could also mean that `Flask-RQ2` is not installed properly in the environment the worker is using, or the virtual environment (if used locally) isn't activated. Ensure dependencies from `requirements.txt` are installed.
+
+*   **Connection Errors to Redis**: Ensure your Redis server (e.g., the `redis` service in Docker Compose, or your local Redis server) is running and accessible at the URL specified in your `REDIS_URL` environment variable.
 
 Using `python -m flask ...` can sometimes be more reliable than just `flask ...` if you have multiple Python versions or complex environments.
 
