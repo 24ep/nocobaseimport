@@ -2,6 +2,14 @@
 {% block content %}
 <h2>Import Job Progress</h2>
 <p><strong>Job ID:</strong> {{ job_id }}</p>
+
+{% if original_filename_for_download %}
+<p>
+    <strong>Original Uploaded File:</strong> {{ original_filename_for_download }}
+    (<a href="{{ url_for('download_file_in_uploads', filename=original_filename_for_download) }}">Download</a>)
+</p>
+{% endif %}
+
 <p><strong>Status:</strong> <span id="job_status">Waiting for updates...</span></p>
 <p><strong>Progress:</strong> <span id="job_progress">0</span>%</p>
 
@@ -81,6 +89,18 @@
                                     }
                                     resultsHtml += `<br><pre style="color:red;">Errors: ${errorContent}</pre>`;
                                 }
+                            } else if (key === 'passed_df_filename' || key === 'error_df_filename') {
+                                if (value) { // Ensure filename is not null or empty
+                                    // Construct a placeholder URL for now.
+                                    // The actual download route /download_file/<UPLOAD_FOLDER_NAME>/<filename>
+                                    // will be implemented in a later step.
+                                    // UPLOAD_FOLDER_NAME needs to be accessible here or assumed.
+                                    // For now, let's assume UPLOAD_FOLDER is 'uploads' as per default config.
+                                    // The filename 'value' already contains the collection name and type.
+                                    resultsHtml += `<a href="/download_file/uploads/${value}" target="_blank">${value}</a>`;
+                                } else {
+                                    resultsHtml += 'N/A';
+                                }
                             } else {
                                 resultsHtml += JSON.stringify(value);
                             }
@@ -105,7 +125,7 @@
                             if (passed_count > 0) {
                                 nextStepContainer.innerHTML = `<a href="{{ url_for('upload_data_form') }}" class="button">Proceed to Upload Options (Step 4)</a>`;
                             } else {
-                                nextStepContainer.innerHTML = `<p>Validation complete, but no data passed. <a href="{{url_for('reset_and_start')}}">Start Over</a></p>`;
+                                nextStepContainer.innerHTML = `<p>Validation complete, but no data passed. <a href="{{url_for('reset_and_start')}}" class="button">Start Over</a></p>`;
                             }
                             nextStepContainer.style.display = 'block';
                         }
@@ -114,7 +134,7 @@
                         if (data.job_type === 'upload') {
                             nextStepContainer.innerHTML = `<p style="color:red;">Upload failed. Please check logs. <a href="{{ url_for('reset_and_start') }}" class="button">Start New Import</a></p>`;
                         } else { // For other job types like dependency or validation
-                            nextStepContainer.innerHTML = `<p style="color:red;">Job failed. <a href="{{url_for('reset_and_start')}}">Start Over</a></p>`;
+                            nextStepContainer.innerHTML = `<p style="color:red;">Job failed. <a href="{{url_for('reset_and_start')}}" class="button">Start Over</a></p>`;
                         }
                         nextStepContainer.style.display = 'block';
                     } else if (data.status === 'SUCCESS' || data.status === 'PARTIAL_FAILURE') { // Combined SUCCESS and PARTIAL_FAILURE for button logic
@@ -127,7 +147,7 @@
                             if (passed_count > 0) {
                                 nextStepContainer.innerHTML = `<a href="{{ url_for('upload_data_form') }}" class="button">Proceed to Upload Options (Step 4)</a>`;
                             } else {
-                                nextStepContainer.innerHTML = `<p>Validation complete, but no data passed. <a href="{{url_for('reset_and_start')}}">Start Over</a></p>`;
+                                nextStepContainer.innerHTML = `<p>Validation complete, but no data passed. <a href="{{url_for('reset_and_start')}}" class="button">Start Over</a></p>`;
                             }
                             nextStepContainer.style.display = 'block';
                         } else if (data.job_type === 'upload') {

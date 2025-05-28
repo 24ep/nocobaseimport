@@ -8,3 +8,4 @@ gunicorn
 Flask-Talisman
 Flask-RQ2
 redis
+minio

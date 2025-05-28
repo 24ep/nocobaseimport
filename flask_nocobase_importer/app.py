@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify # Added jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory # Added jsonify and send_from_directory
 import os
 from werkzeug.utils import secure_filename
 import pandas as pd
@@ -9,6 +9,12 @@ from flask_talisman import Talisman # Import Talisman
 from flask_rq2 import RQ # Add this import
 from rq.job import Job # Add this import
 from rq.exceptions import NoSuchJobError # Add this import
+
+# Imports for Profile Management
+from flask_wtf import FlaskForm
+from wtforms import StringField, IntegerField, PasswordField, SubmitField
+from wtforms.validators import DataRequired, Length, Optional, NumberRange # Added NumberRange
+import flask_nocobase_importer.profile_manager as pm # Alias for profile_manager
 
 from flask_nocobase_importer.db_manager import DatabaseManager
 from flask_nocobase_importer.data_processing import (
@@ -21,6 +27,16 @@ from flask_nocobase_importer.data_processing import (
 from .tasks import run_dependency_processing_task, run_validation_task, run_upload_task # Import the new task
 
 app = Flask(__name__)
+
+# Define the ProfileForm
+class ProfileForm(FlaskForm):
+    profile_name = StringField('Profile Name', validators=[DataRequired(), Length(min=1, max=255)])
+    db_host = StringField('Host', validators=[DataRequired(), Length(min=1, max=255)])
+    db_port = IntegerField('Port', validators=[DataRequired(), NumberRange(min=1, max=65535)])
+    db_name = StringField('Database Name', validators=[DataRequired(), Length(min=1, max=255)])
+    db_user = StringField('User', validators=[DataRequired(), Length(min=1, max=255)])
+    db_password = PasswordField('Password (leave blank to keep unchanged on edit)', validators=[Optional(), Length(max=255)])
+    submit = SubmitField('Save Profile')
 
 # Initialize Talisman with default settings for security headers
 # The default CSP is quite strict:
@@ -161,26 +177,26 @@ def process_dependencies():
         session.pop('selected_collection', None)
         return redirect(url_for('index'))
         
-    try:
-        df = pd.read_parquet(processed_df_path)
-    except Exception as e:
-        flash(f"Error reading processed data: {e}. Please re-upload.", "error")
-        return redirect(url_for('index'))
+    # It's good practice to check if df can be read, but this is now done at the start of the task.
+    # try:
+    #     df = pd.read_parquet(processed_df_path) # df is not used here anymore.
+    # except Exception as e:
+    #     flash(f"Error reading processed data: {e}. Please re-upload.", "error")
+    #     return redirect(url_for('index'))
 
-    db = DatabaseManager()
-    session['dependency_statuses'] = {} # This will be populated by the task results eventually
+    # db = DatabaseManager() # db is not used here anymore.
+    # session['dependency_statuses'] = {} # This will be populated by the task results eventually
 
     # Enqueue the background task
     try:
-        # Use the default queue, ensure rq is initialized (it is globally in this file)
         queue = rq.get_queue()
-        meta = {'job_type': 'dependency_processing'} # Add job_type to meta
+        meta = {'job_type': 'dependency_processing'} 
         job = queue.enqueue(
             run_dependency_processing_task,
             args=(processed_df_path, selected_collection),
-            job_timeout='2h', # Example timeout
-            result_ttl=86400, # Keep result for 1 day
-            meta=meta # Pass meta to the job
+            job_timeout='2h', 
+            result_ttl=86400, 
+            meta=meta 
         )
         session['dependency_job_id'] = job.id
         flash(f"Dependency processing started in the background (Job ID: {job.id}). You will be redirected to the progress page.", "info")
@@ -189,139 +205,6 @@ def process_dependencies():
         flash(f"Error enqueuing dependency processing task: {e}", "error")
         app.logger.error(f"Failed to enqueue task: {e}", exc_info=True)
         return redirect(url_for('index'))
-
-    # The old synchronous logic is now moved to tasks.py
-    # if selected_collection == "visitor_information":
-    #     app.logger.info("Performing visitor_information specific preprocessing.")
-        if "company_name_en" in df.columns or "company_name_th" in df.columns:
-            df["lookup_company"] = df.get("company_name_en", pd.Series(dtype='object')).fillna("").replace("", pd.NA)
-            df["lookup_company"] = df["lookup_company"].fillna(df.get("company_name_th", pd.Series(dtype='object')).fillna(""))
-            df["lookup_company"] = df["lookup_company"].replace("", pd.NA)
-        else:
-            app.logger.warning("Skipping lookup_company: no 'company_name_en' or 'company_name_th' column found.")
-            if "lookup_company" not in df.columns : 
-                df["lookup_company"] = pd.NA
-
-        if {"lookup_position", "lookup_department"}.issubset(df.columns) and "lookup_company" in df.columns:
-             df['position_at_work'] = df.apply(make_position_at_work, axis=1)
-        else:
-            app.logger.warning("Skipping position_at_work: missing one or more of 'lookup_position', 'lookup_department', 'lookup_company'.")
-
-        for i in [1, 2]:
-            num_col = f"telephone_no_{i}"
-            ext_col = f"extension_{i}"
-            out_col = f"telephone_extension_{i}"
-            if num_col in df.columns or ext_col in df.columns:
-                df[out_col] = df.apply(lambda row: make_extension(row, num_col, ext_col), axis=1)
-            
-        phone_cols = [c for c in ["mobile_no_1", "mobile_no_2", "telephone_extension_1", "telephone_extension_2"] if c in df.columns]
-        if phone_cols:
-            df['phone_number'] = df[phone_cols].astype(str).agg(
-                lambda x: '|'.join(i for i in x.dropna() if str(i).strip() and str(i).lower() not in ['nan', '<na>', 'none']), axis=1 
-            ).replace('', pd.NA) 
-        else:
-            app.logger.warning("Skipping phone_number: no source phone columns found.")
-        
-        try:
-            df.to_parquet(processed_df_path) 
-            app.logger.info(f"DataFrame for '{selected_collection}' updated with preprocessing and saved to {processed_df_path}")
-        except Exception as e:
-            flash(f"Error saving preprocessed data for visitor_information: {e}", "error")
-            return redirect(url_for('index'))
-
-    dependencies = {}
-    if "origin_source" in df.columns:
-        dependencies["original_source"] = {
-            "cols": ["origin_source"], "mapping": {"origin_source": "source_name"}
-        }
-    if "email" in df.columns:
-        dependencies["email_list"] = {
-            "cols": ["email"], "mapping": {"email": "email_list"}
-        }
-    
-    if "phone_number" in df.columns:
-        df_phone_exploded = df.copy()
-        if not df_phone_exploded["phone_number"].empty and df_phone_exploded["phone_number"].dropna().apply(lambda x: isinstance(x, str) and "|" in x).any():
-             df_phone_exploded["phone_number"] = df_phone_exploded["phone_number"].astype(str).str.split("|")
-             df_phone_exploded = df_phone_exploded.explode("phone_number").reset_index(drop=True)
-             df_phone_exploded["phone_number"] = df_phone_exploded["phone_number"].str.strip().replace('', pd.NA) 
-        dependencies["calling_list"] = {
-            "cols": ["phone_number"], "mapping": {"phone_number": "number_with_extension"},
-            "source_df": df_phone_exploded 
-        }
-
-    if "lookup_company" in df.columns:
-        df_company_exploded = df.copy()
-        if not df_company_exploded["lookup_company"].empty and df_company_exploded["lookup_company"].dropna().apply(lambda x: isinstance(x, str) and "|" in x).any():
-            df_company_exploded["lookup_company"] = df_company_exploded["lookup_company"].astype(str).str.split("|")
-            df_company_exploded = df_company_exploded.explode("lookup_company").reset_index(drop=True)
-            df_company_exploded["lookup_company"] = df_company_exploded["lookup_company"].str.strip().replace('',pd.NA)
-        company_cols = ["lookup_company", "company_name_en", "company_name_th", "company_email",
-                        "company_website", "company_facebook", "company_register_capital",
-                        "company_employee_no", "company_product_profile",
-                        "lookup_industry", "lookup_sub_industry"]
-        existing_company_cols = [col for col in company_cols if col in df_company_exploded.columns]
-        dependencies["company"] = {
-            "cols": existing_company_cols,
-            "mapping": {"lookup_company": "company_name_code", 
-                        "company_register_capital":"register_capital",
-                        "company_employee_no":"company_employee_size",
-                        "lookup_industry":"industry", "lookup_sub_industry":"sub_industry"},
-            "source_df": df_company_exploded
-        }
-
-    if "position_at_work" in df.columns:
-        df_paw_exploded = df.copy()
-        if not df_paw_exploded["position_at_work"].empty and df_paw_exploded["position_at_work"].dropna().apply(lambda x: isinstance(x, str) and "|" in x).any():
-            df_paw_exploded["position_at_work"] = df_paw_exploded["position_at_work"].astype(str).str.split("|")
-            df_paw_exploded = df_paw_exploded.explode("position_at_work").reset_index(drop=True)
-            df_paw_exploded["position_at_work"] = df_paw_exploded["position_at_work"].str.strip().replace('',pd.NA)
-        paw_cols = ["position_at_work", "lookup_position", "lookup_department", "lookup_company",
-                    "lookup_industry", "lookup_sub_industry"]
-        existing_paw_cols = [col for col in paw_cols if col in df_paw_exploded.columns]
-        dependencies["position_at_work"] = {
-            "cols": existing_paw_cols,
-            "mapping": {"lookup_position":"position", "lookup_department":"department", 
-                        "lookup_company":"company"},
-             "source_df": df_paw_exploded
-        }
-
-    dependency_statuses = {}
-    all_success = True
-    if not dependencies:
-        flash("No dependencies to process for this collection based on available columns.", "info")
-    else:
-        for dep_name, config in dependencies.items():
-            app.logger.info(f"Processing dependency: {dep_name}")
-            df_for_processing = config.get("source_df", df).copy() 
-            try:
-                success, error_df, count = process_dependency(db, dep_name, config, df_for_processing)
-                error_json = None
-                if error_df is not None and not error_df.empty:
-                     error_json = error_df.to_json(orient='split', index=False) 
-                     all_success = False if not success else all_success 
-                dependency_statuses[dep_name] = {'success': success, 'count': count, 'errors': error_json}
-                if not success:
-                    all_success = False
-                    flash(f"Dependency '{dep_name}' failed to process fully.", "warning")
-                elif error_json:
-                    flash(f"Dependency '{dep_name}' processed with {count} upserts, but some source rows had validation issues.", "warning")
-                else:
-                    flash(f"Dependency '{dep_name}' processed successfully ({count} rows).", "success")
-            except Exception as e:
-                app.logger.error(f"Critical error processing dependency {dep_name}: {e}", exc_info=True)
-                dependency_statuses[dep_name] = {'success': False, 'count': 0, 'errors': f"Critical error: {e}"}
-                all_success = False
-                flash(f"A critical error occurred while processing dependency '{dep_name}'.", "error")
-    
-    session['dependency_statuses'] = dependency_statuses
-    # session['all_dependencies_processed_successfully'] = all_success
-
-    # return render_template('process_dependencies.html', 
-    #                        title='Step 2: Process Dependencies',
-    #                        selected_collection=selected_collection,
-    #                        dependency_statuses=dependency_statuses,
-    #                        all_success=all_success)
 
 @app.route('/import_job/<job_id>')
 def import_job_progress(job_id):
@@ -335,11 +218,17 @@ def import_job_progress(job_id):
         status = job.get_status()
         meta = job.meta or {}
         
+        uploaded_filepath_from_session = session.get('uploaded_filepath')
+        original_filename = None
+        if uploaded_filepath_from_session:
+            original_filename = os.path.basename(uploaded_filepath_from_session)
+
         return render_template('import_job_progress.html',
                                job_id=job.id,
                                status=status,
                                meta=meta, # Pass whole meta for flexibility
-                               title=f"Job {job.id} Progress")
+                               title=f"Job {job.id} Progress",
+                               original_filename_for_download=original_filename)
     except NoSuchJobError:
         flash(f"Job {job_id} not found (NoSuchJobError).", "error")
         return redirect(url_for('index'))
@@ -539,16 +428,24 @@ def upload_data_form():
 
 @app.route('/execute_upload', methods=['POST'])
 def execute_upload():
-    passed_df_filename = session.get('passed_df_filename') # Use filename from session
+    passed_df_filename = session.get('passed_df_filename') 
     selected_collection = session.get('selected_collection')
+    # Add this line to get the original file path
+    original_uploaded_filepath = session.get('uploaded_filepath') 
 
     if not passed_df_filename or not selected_collection:
         flash("Session data for upload missing or expired. Please start from Step 1.", "error")
         return redirect(url_for('index'))
     
-    passed_df_path = os.path.join(app.config['UPLOAD_FOLDER'], passed_df_filename) # Still need this for path construction logic
+    # It's good to also check if original_uploaded_filepath exists if we intend to back it up,
+    # though the backup can fail gracefully in the task if it's missing.
+    if not original_uploaded_filepath:
+        flash("Original uploaded file path not found in session. Backup to MinIO might be skipped.", "warning")
+        # Depending on policy, this could be an error, but for now, a warning.
 
-    if not os.path.exists(passed_df_path): # Check if source file exists before enqueuing
+    passed_df_path = os.path.join(app.config['UPLOAD_FOLDER'], passed_df_filename) 
+
+    if not os.path.exists(passed_df_path): 
         flash(f"Passed data file '{passed_df_filename}' not found. Please re-validate.", "error")
         return redirect(url_for('validate_data'))
 
@@ -556,7 +453,6 @@ def execute_upload():
     pk_column = request.form.get('pk_column') if upload_mode == 'update' else None
     conflict_column = request.form.get('conflict_column') if upload_mode == 'insert on duplicate update' else None
     
-    # Basic validation for conditional fields
     if upload_mode == 'update' and not pk_column:
         flash("Primary Key column must be selected for 'update' mode.", "error")
         return redirect(url_for('upload_data_form'))
@@ -568,9 +464,9 @@ def execute_upload():
         queue = rq.get_queue()
         upload_job = queue.enqueue(
             run_upload_task,
-            args=(passed_df_filename, selected_collection, upload_mode, pk_column, conflict_column, app.config['UPLOAD_FOLDER']),
-            job_timeout='3h', # Example timeout for upload
-            result_ttl=86400, # Keep result for 1 day
+            args=(passed_df_filename, selected_collection, upload_mode, pk_column, conflict_column, app.config['UPLOAD_FOLDER'], original_uploaded_filepath), # Added original_uploaded_filepath
+            job_timeout='3h', 
+            result_ttl=86400, 
             meta={'job_type': 'upload'}
         )
         session['upload_job_id'] = upload_job.id
@@ -587,6 +483,98 @@ def execute_upload():
 def upload_status():
     return render_template('upload_status.html', title='Upload Status')
 
+@app.route('/download_file/uploads/<path:filename>')
+def download_file_in_uploads(filename):
+    try:
+        # app.config['UPLOAD_FOLDER'] is the directory name like 'uploads'
+        # send_from_directory will look for 'filename' inside 'app.config['UPLOAD_FOLDER']'
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    except FileNotFoundError:
+        flash(f"File '{filename}' not found in the upload directory.", "error")
+        return redirect(request.referrer or url_for('index')) # Go back or to index
+    except Exception as e:
+        app.logger.error(f"Error downloading file {filename} from uploads: {e}")
+        flash("An error occurred while trying to download the file.", "error")
+        return redirect(request.referrer or url_for('index'))
+
+# New Routes for Profile Management
+@app.route('/profiles')
+def list_profiles():
+    profiles = pm.get_all_profiles()
+    return render_template('profiles/list.html', profiles=profiles, title="Manage NocoBase Profiles")
+
+@app.route('/profiles/new', methods=['GET', 'POST'])
+def new_profile():
+    form = ProfileForm()
+    if form.validate_on_submit():
+        if not form.db_password.data: # Password required for new profile
+            form.db_password.errors.append("Password is required for a new profile.")
+        else:
+            success = pm.add_profile(
+                profile_name=form.profile_name.data,
+                db_host=form.db_host.data,
+                db_port=form.db_port.data,
+                db_name=form.db_name.data,
+                db_user=form.db_user.data,
+                db_password=form.db_password.data
+            )
+            if success:
+                flash('NocoBase profile added successfully!', 'success')
+                return redirect(url_for('list_profiles'))
+            else:
+                flash('Error adding profile. Check logs or try a different profile name (must be unique).', 'error')
+    return render_template('profiles/form.html', form=form, title="Add New NocoBase Profile", action="Create")
+
+@app.route('/profiles/<int:profile_id>/edit', methods=['GET', 'POST'])
+def edit_profile(profile_id):
+    profile = pm.get_profile_by_id(profile_id)
+    if not profile:
+        flash('Profile not found.', 'error')
+        return redirect(url_for('list_profiles'))
+
+    form = ProfileForm(obj=profile) # Populate form with existing data
+
+    if form.validate_on_submit():
+        new_password = form.db_password.data
+        current_password = profile['db_password'] # Password was fetched by get_profile_by_id
+        
+        password_to_save = new_password if new_password else current_password
+            
+        success = pm.update_profile(
+            profile_id=profile_id,
+            profile_name=form.profile_name.data,
+            db_host=form.db_host.data,
+            db_port=form.db_port.data,
+            db_name=form.db_name.data,
+            db_user=form.db_user.data,
+            db_password=password_to_save
+        )
+        if success:
+            flash('Profile updated successfully!', 'success')
+            return redirect(url_for('list_profiles'))
+        else:
+            flash('Error updating profile. Check logs or try a different profile name (must be unique).', 'error')
+    
+    # For GET request, clear password field before rendering
+    form.db_password.data = "" 
+    
+    return render_template('profiles/form.html', form=form, title="Edit NocoBase Profile", profile_id=profile_id, action="Update")
+
+@app.route('/profiles/<int:profile_id>/delete', methods=['POST'])
+def delete_profile_route(profile_id): # Renamed to avoid conflict with profile_manager.delete_profile
+    # CSRF protection would be good here if using a real form/button for delete.
+    # For now, simple POST link.
+    profile = pm.get_profile_by_id(profile_id) # Fetch to confirm existence and for flash message
+    if not profile:
+        flash('Profile not found.', 'error')
+        return redirect(url_for('list_profiles'))
+
+    success = pm.delete_profile(profile_id)
+    if success:
+        flash(f"Profile '{profile['profile_name']}' deleted successfully!", 'success')
+    else:
+        flash(f"Error deleting profile '{profile['profile_name']}'.", 'error')
+    return redirect(url_for('list_profiles'))
 
 if __name__ == '__main__':
     port = int(os.environ.get("FLASK_RUN_PORT", 5000))

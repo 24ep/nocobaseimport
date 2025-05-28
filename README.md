@@ -1,17 +1,16 @@
 # NocoBase Data Importer (Flask Version)
 
 This application allows importing data into NocoBase collections via an Excel file,
-with steps for dependency processing, validation, and various upload modes.
+with steps for dependency processing, validation, and various upload modes. It now also includes features like automatic backup of original uploaded files to a MinIO server, enhanced job progress tracking with downloadable result files, and an improved user interface.
 
 ## Docker Deployment
 
-This application can be easily deployed using Docker.
+This application can be easily deployed using Docker. The recommended method is using `docker-compose.yml` as described below.
 
 ### Prerequisites
 
-*   Docker installed.
-*   An instance of PostgreSQL database accessible to the container.
-*   An instance of Redis accessible to the application and RQ workers.
+*   Docker and Docker Compose installed.
+*   (Redis, MinIO, and PostgreSQL services for the importer app and a sample NocoBase target are provided in the `docker-compose.yml`)
 
 ### Environment Configuration
 
@@ -19,18 +18,68 @@ This application can be easily deployed using Docker.
     ```bash
     cp .env.example .env
     ```
-2.  Edit the `.env` file with your actual database credentials and desired Flask configurations:
-    *   `DB_HOST`: Your database host.
-    *   `DB_PORT`: Your database port.
-    *   `DB_NAME`: The name of your NocoBase database.
-    *   `DB_USER`: Database user.
-    *   `DB_PASSWORD`: Database password.
+2.  Edit the `.env` file with your desired configurations:
     *   `FLASK_SECRET_KEY`: A strong, unique secret key for Flask sessions.
-    *   `FLASK_UPLOAD_FOLDER`: The folder where uploaded files will be temporarily stored *inside the container*. Defaults to `uploads/` relative to the app. If mapping a volume, ensure this path matches.
+    *   `FLASK_UPLOAD_FOLDER`: The folder where uploaded files will be temporarily stored. When using `docker-compose.yml` (recommended), this is set to `/app/flask_nocobase_importer/uploads` inside the container to match the mounted volume.
     *   `FLASK_RUN_PORT`: Port inside the container the app runs on (defaults to 5000, matches Dockerfile).
-    *   `REDIS_URL`: The connection URL for your Redis instance (e.g., `redis://localhost:6379/0`).
+    *   `REDIS_URL`: The connection URL for your Redis instance (e.g., `redis://redis:6379/0` when using the provided `docker-compose.yml`).
+    *   `MINIO_ENDPOINT`: Endpoint of your MinIO server (e.g., `http://minio:9000` when using the provided `docker-compose.yml`).
+    *   `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET_NAME`: Credentials and bucket for MinIO.
+    *   `MINIO_SECURE`: Set to `True` if your MinIO connection uses HTTPS, `False` otherwise.
+    *   `IMPORTER_DB_NAME`, `IMPORTER_DB_USER`, `IMPORTER_DB_PASSWORD`: Credentials for the importer application's own PostgreSQL database.
+    *   `SAMPLE_NOCOBASE_DB_NAME`, `SAMPLE_NOCOBASE_DB_USER`, `SAMPLE_NOCOBASE_DB_PASSWORD`: Credentials for the optional sample target NocoBase PostgreSQL database.
 
-### Building the Docker Image
+### Deployment with Docker Compose
+
+For a comprehensive local development, testing, and production-like environment, Docker Compose is used to manage the web application, RQ worker, Redis, MinIO, and PostgreSQL services.
+
+1.  **Prerequisites**: Ensure you have Docker and Docker Compose installed.
+2.  **Environment Configuration**: Create or update your `.env` file from `.env.example` with your configurations.
+    *   MinIO connection variables (`MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET_NAME`) should be configured. The `docker-compose.yml` sets up a MinIO service using these for root credentials and configures the web/worker services to connect to it at `http://minio:9000`.
+    *   Database credentials for the importer app (`IMPORTER_DB_NAME`, `IMPORTER_DB_USER`, `IMPORTER_DB_PASSWORD`) and the sample NocoBase DB (`SAMPLE_NOCOBASE_DB_NAME`, etc.) are also required.
+3.  **Start Services**: Navigate to the project root directory and run:
+    ```bash
+    docker-compose up -d --build
+    ```
+    This command will:
+    *   Build the Docker image for the `web` and `worker` services (if not already built or if changes are detected).
+    *   Start the Flask web server (using Gunicorn), RQ worker, Redis, MinIO, and the importer application's own PostgreSQL database (`importer_db`) in detached mode.
+    *   It also starts an optional `sample_nocobase_db` PostgreSQL service. This service can be used as a target database for testing imports. It will be initially empty and accessible to the importer application at host `sample_nocobase_db` on port `5432`.
+
+4.  **Accessing Services**:
+    *   Application: The application should be accessible at `http://localhost:5000`.
+    *   MinIO Console: The MinIO console will be available at `http://localhost:9001` (using the `MINIO_ACCESS_KEY` and `MINIO_SECRET_KEY` from your `.env` file as `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` respectively).
+    *   Importer App DB: Accessible on host port `5433` (maps to `5432` in container).
+    *   Sample NocoBase DB: Accessible on host port `5434` (maps to `5432` in container).
+5.  **Persistent Data**: The `docker-compose.yml` uses named volumes to persist data for Redis (`redis_data`), MinIO (`minio_data`), the importer app's database (`importer_db_data`), and the sample NocoBase database (`sample_nocobase_db_data`). Uploaded files are persisted in the `./persistent_uploads` directory on the host, which is mounted into the `web` and `worker` containers.
+6.  **Stopping Services**: To stop all services, run from another terminal:
+    ```bash
+    docker-compose down
+    ```
+
+#### Using the Sample NocoBase Target Database (`sample_nocobase_db`)
+
+The `docker-compose.yml` includes an additional PostgreSQL service named `sample_nocobase_db`. This database is provided as a convenient, empty target for testing your import configurations.
+
+To use it:
+1.  Ensure the `sample_nocobase_db` service is running (it starts by default with `docker-compose up -d`).
+2.  In the NocoBase Importer application, navigate to "Manage NocoBase Profiles" and add a new profile.
+3.  Use the following connection details for the profile:
+    *   **Profile Name**: A friendly name, e.g., `Local Sample NocoBase DB`
+    *   **Host**: `sample_nocobase_db` (this is the service name within the Docker network)
+    *   **Port**: `5432` (the internal port for PostgreSQL)
+    *   **Database Name**: The value you set for `SAMPLE_NOCOBASE_DB_NAME` in your `.env` file (defaults to `sample_nocobase_data`).
+    *   **User**: The value you set for `SAMPLE_NOCOBASE_DB_USER` in your `.env` file (defaults to `sample_user`).
+    *   **Password**: The value you set for `SAMPLE_NOCOBASE_DB_PASSWORD` in your `.env` file.
+4.  Save the profile. You can now select this profile when starting a new import.
+
+**Note**: This `sample_nocobase_db` is a plain PostgreSQL instance. For it to function as a true NocoBase database, you would need to initialize it with the NocoBase schema separately. This setup does not do that for you; it merely provides the PostgreSQL instance.
+
+### Manual Docker Build and Run (Advanced)
+
+While `docker-compose` (described above) is the recommended method for running the application and all its services, you can also build and run the web container manually.
+
+#### Building the Docker Image
 
 Navigate to the project root directory (where the `Dockerfile` is located) and run:
 
@@ -38,9 +87,9 @@ Navigate to the project root directory (where the `Dockerfile` is located) and r
 docker build -t nocobase-importer .
 ```
 
-### Running the Docker Container
+#### Running the Docker Container (Web only)
 
-To run the container:
+To run the container (assuming Redis, MinIO, and PostgreSQL are accessible):
 
 ```bash
 docker run -d \
@@ -50,45 +99,37 @@ docker run -d \
   --name nocobase-importer-app \
   nocobase-importer
 ```
+Note: You'll need to ensure all environment variables in `.env` (including for Redis, MinIO, DBs) are correctly pointing to your externally managed services.
 
-Explanation of flags:
-*   `-d`: Run the container in detached mode (in the background).
-*   `-p 5000:5000`: Map port 5000 on your host to port 5000 in the container (where the Flask app runs).
-*   `--env-file .env`: Load environment variables from your `.env` file.
-*   `-v "$(pwd)/persistent_uploads":/app/flask_nocobase_importer/uploads`: Mount a directory from your host (`./persistent_uploads` - it will be created if it doesn't exist) to the `/app/flask_nocobase_importer/uploads` directory inside the container. This ensures that uploaded Excel files and temporary Parquet DataFrames are persisted across container restarts.
-*   `--name nocobase-importer-app`: Assign a name to your running container for easier management.
-*   `nocobase-importer`: The name of the image you built.
+### Deployment with Portainer (using Stacks)
 
-After running, the application should be accessible at `http://localhost:5000`.
+The recommended way to deploy this application using Portainer is via its "Stacks" feature, which utilizes the `docker-compose.yml` file.
 
-### Development with Docker Compose
+1.  **Prepare your Environment File**:
+    *   Create a `.env` file on your system based on `.env.example`.
+    *   Fill in all necessary values, especially for `FLASK_SECRET_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `IMPORTER_DB_PASSWORD`, `SAMPLE_NOCOBASE_DB_PASSWORD`, etc.
 
-For a more integrated local development and testing environment, Docker Compose can be used to manage the web application, Redis, and RQ worker services.
+2.  **Create a New Stack in Portainer**:
+    *   Navigate to "Stacks" in Portainer and click "Add stack".
+    *   **Name**: Give your stack a name (e.g., `nocobase-importer-stack`).
+    *   **Build method**: Choose "Web editor".
+    *   **Web editor**: Copy the entire content of the `docker-compose.yml` file from this project and paste it into the editor.
+    *   **Environment variables**:
+        *   Portainer Stacks can utilize `.env` files in different ways depending on the Portainer version and setup.
+        *   Focus on defining runtime secrets in the "Environment variables" section if not using a `.env` file effectively. The `docker-compose.yml` references these from the environment it runs in (e.g., `FLASK_SECRET_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `IMPORTER_DB_NAME`, `IMPORTER_DB_USER`, `IMPORTER_DB_PASSWORD`, `SAMPLE_NOCOBASE_DB_NAME`, `SAMPLE_NOCOBASE_DB_USER`, `SAMPLE_NOCOBASE_DB_PASSWORD`).
+        *   Service-to-service connection details like `DB_HOST=importer_db` or `MINIO_ENDPOINT=http://minio:9000` are usually hardcoded in the `docker-compose.yml` or in the application's specific environment variables pointing to service names.
 
-1.  **Prerequisites**: Ensure you have Docker Compose installed.
-2.  **Environment Configuration**: Create or update your `.env` file from `.env.example` with your configurations.
-    *   For `DB_HOST`, if your PostgreSQL is running on the host machine from Docker's perspective:
-        *   On Docker Desktop (Windows/Mac), you can often use `host.docker.internal`.
-        *   On Linux, you might need to use your machine's local IP address on the Docker bridge network (e.g., `172.17.0.1` by default for the `docker0` bridge) or configure services to run on the same Docker network.
-    *   If PostgreSQL is running as another Docker container (not defined in this `docker-compose.yml`), use its service name if they are on the same user-defined Docker network, or its IP address.
-3.  **Start Services**: Navigate to the project root directory and run:
-    ```bash
-    docker-compose up --build
-    ```
-    This command will:
-    *   Build the Docker image for the `web` and `worker` services (if not already built or if changes are detected).
-    *   Start the Flask web server (using Gunicorn as per Dockerfile CMD), Redis, and an RQ worker.
-4.  **Accessing the Application**: The application should be accessible at `http://localhost:5000`.
-5.  **Stopping Services**: To stop all services, press `Ctrl+C` in the terminal where `docker-compose up` is running, or run from another terminal:
-    ```bash
-    docker-compose down
-    ```
+3.  **Deploy the Stack**: Click "Deploy the stack". Portainer will pull the necessary images and start all services defined in the `docker-compose.yml`.
 
-### Running the Web Container Manually (without Docker Compose)
+4.  **Accessing Services**:
+    *   Application: `http://<your-portainer-host-ip>:5000`
+    *   MinIO Console: `http://<your-portainer-host-ip>:9001`
+    *   Importer App DB: `your-portainer-host-ip:5433`
+    *   Sample NocoBase DB: `your-portainer-host-ip:5434`
 
-The instructions below are for running the web application container by itself, assuming Redis and a database are accessible separately.
+5.  **Volumes**: Portainer will manage the volumes defined in `docker-compose.yml`. The `./persistent_uploads` directory specified in the `volumes` section for `web` and `worker` services will be created on the Docker host where Portainer executes the stack.
 
-### Running RQ Workers Manually (for Local Development)
+### Running RQ Workers Manually (for Local Development without Docker Compose)
 
 While Docker Compose (`docker-compose up`) is the recommended way to run all services including the RQ worker during development, you can also run the RQ worker manually in your local environment. This requires careful setup:
 
@@ -113,9 +154,9 @@ While Docker Compose (`docker-compose up`) is the recommended way to run all ser
         ```
     You must set this from the project root directory (the directory containing the `flask_nocobase_importer` folder and your `.env` file).
 
-3.  **Ensure `.env` File is Present**: The worker tasks may need database credentials or other configurations defined in your `.env` file. Make sure your `.env` file (copied from `.env.example` and configured) is present in the current working directory (project root) when you start the worker.
+3.  **Ensure `.env` File is Present**: The worker tasks may need database credentials or other configurations defined in your `.env` file. Make sure your `.env` file (copied from `.env.example` and configured) is present in the current working directory (project root) when you start the worker. This includes `IMPORTER_DB_*` variables, `REDIS_URL`, and `MINIO_*` variables.
 
-4.  **Ensure Redis is Running**: The RQ worker needs to connect to a Redis server. Make sure your Redis server is running and accessible at the URL specified in your `REDIS_URL` environment variable (default is `redis://localhost:6379/0` if not set).
+4.  **Ensure Redis, MinIO, and Importer DB are Running**: The RQ worker needs to connect to a Redis server. The tasks may also interact with MinIO and the importer application's database. Make sure these services are running and accessible at the URLs specified in your environment variables.
 
 5.  **Start the Worker**: From your project root directory, run the following command:
     ```bash
@@ -130,26 +171,9 @@ While Docker Compose (`docker-compose up`) is the recommended way to run all ser
 **Troubleshooting Worker Startup:**
 *   **`Error: Could not locate a Flask application.`**: This usually means `FLASK_APP` is not set correctly or you are not in the project root directory. Verify the variable and your current path.
 *   **`Error: No such command 'rq'.`**: This typically means the virtual environment isn't activated, `Flask-RQ2` is not installed properly, or there's an issue with your Python environment's PATH. Ensure `pip install -r requirements.txt` was successful.
-*   **Connection Errors to Redis**: Ensure Redis is running and accessible.
+*   **Connection Errors to Redis/MinIO/DB**: Ensure these services are running and accessible, and that your `.env` file has the correct connection details.
 
 Using `python -m flask ...` can sometimes be more reliable than just `flask ...` if you have multiple Python versions or complex environments.
-
-### Deployment with Portainer
-
-1.  **Add Image**: You can either pull the image from a Docker registry (if you push it there) or use an image already present on the Docker host where Portainer is running (e.g., after building it locally as described above).
-2.  **Create Container**:
-    *   Click on "Add container".
-    *   **Name**: Give your container a name (e.g., `NocoBaseImporter`).
-    *   **Image**: Enter the image name (`nocobase-importer:latest` or your specific tag).
-    *   **Port mapping**: Map the host port (e.g., `5000`) to the container port `5000`.
-    *   **Environment variables**: Under the "Env" tab, add all the environment variables listed in `.env.example` (including `REDIS_URL`) with their appropriate values for your setup.
-    *   **Volumes**: Under the "Volumes" tab, map a host path or a named Docker volume to the container path `/app/flask_nocobase_importer/uploads` to persist uploaded files. For example:
-        *   Bind: Host path `/path/on/your/host/persistent_uploads` to container path `/app/flask_nocobase_importer/uploads`.
-        *   Volume: Choose or create a named volume and map it to `/app/flask_nocobase_importer/uploads`.
-    *   **Restart policy**: Optionally, set a restart policy (e.g., "Unless stopped" or "Always").
-    *   Click "Deploy the container".
-
-Ensure your database is configured to accept connections from the Docker container's IP address or the Docker network.
 
 ## Security Considerations
 
@@ -160,12 +184,12 @@ The application itself does not handle SSL/TLS termination. For production deplo
 
 ### Secret Management
 *   **`FLASK_SECRET_KEY`**: This key is used to sign session cookies and other security-sensitive tokens. The default value in `.env.example` **must be changed** to a strong, unique, and random string for your production environment. Keep this key confidential.
-*   **Database Credentials**: Ensure your `.env` file containing database credentials (`DB_HOST`, `DB_USER`, `DB_PASSWORD`, etc.) is kept secure, has appropriate file permissions, and is **never committed to version control**.
+*   **Database Credentials & MinIO Keys**: Ensure your `.env` file containing database credentials (for the importer app DB, sample NocoBase DB) and MinIO keys (`MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`) is kept secure, has appropriate file permissions, and is **never committed to version control**.
 *   **Environment Variables**: In general, prefer environment variables for all secrets, as demonstrated in the Docker deployment setup.
 
 ### File Uploads
 *   **Size Limit**: The application is configured with a maximum file upload size (currently 16MB, set by `MAX_CONTENT_LENGTH` in `app.py`) to prevent denial-of-service attacks via excessively large uploads.
-*   **Filename Sanitization**: Uploaded filenames are processed using Werkzeug's `secure_filename` to prevent directory traversal attacks or malicious filenames.
+*   **Filename Sanitization**: Uploaded filenames are processed using Werkzeug's `secure_filename` to prevent directory traversal attacks or malicious filenames. MinIO destination filenames are also sanitized in the tasks.
 *   **Content Type**: While the application primarily expects Excel files, further validation of file content or MIME types could be added if stricter controls are needed beyond what `pandas.read_excel` provides.
 
 ### Dependency Management
@@ -187,5 +211,5 @@ The application is configured to use secure session cookie attributes:
 *   **Content Security Policy (CSP)**: Flask-Talisman applies a default CSP (e.g., `default-src 'self'; object-src 'none';`). This is a strong baseline. If your application needs to load resources from external domains (e.g., CDNs for CSS/JS, external images, APIs), you may need to customize the CSP policy in `app.py` when initializing Talisman.
 
 ### Running in Docker
-*   The provided `Dockerfile` and deployment instructions aim for a secure setup. Ensure your Docker host is secured and that you manage your `.env` files and any mapped volumes appropriately.
+*   The provided `Dockerfile` and `docker-compose.yml` aim for a secure setup. Ensure your Docker host is secured and that you manage your `.env` files and any mapped volumes appropriately.
 ```

@@ -13,6 +13,8 @@
         <!-- Title is now part of the main H1, link styling handled by CSS -->
         <h1><a href="{{ url_for('index') }}">{{ title | default('NocoBase Importer', true) }}</a></h1>
         <nav>
+          <a href="{{ url_for('index') }}">Main Importer</a> | 
+          <a href="{{ url_for('list_profiles') }}">Manage NocoBase Profiles</a> | 
           <a href="{{ url_for('reset_and_start') }}">Start New Import (Clear Session)</a>
         </nav>
       </header>
