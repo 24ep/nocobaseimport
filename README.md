@@ -88,17 +88,51 @@ For a more integrated local development and testing environment, Docker Compose 
 
 The instructions below are for running the web application container by itself, assuming Redis and a database are accessible separately.
 
-### Running RQ Workers
+### Running RQ Workers Manually (for Local Development)
 
-For asynchronous task processing (like data import, which will be refactored to use tasks), an RQ worker process must be running. You can start a worker in your local development environment (with the same virtual environment activated) using:
-```bash
-flask rq worker
-```
-Or, if you prefer not to install flask globally:
-```bash
-python -m flask rq worker
-```
-When using Docker Compose, the `worker` service handles this automatically. For a simple Docker run (without Compose), you'd need to run the worker in a separate container or process that has access to the same Redis instance and application code, ensuring its environment variables are also set correctly.
+While Docker Compose (`docker-compose up`) is the recommended way to run all services including the RQ worker during development, you can also run the RQ worker manually in your local environment. This requires careful setup:
+
+1.  **Activate Virtual Environment**: Ensure you have activated the Python virtual environment where all dependencies from `requirements.txt` are installed.
+    ```bash
+    # Example:
+    # source venv/bin/activate
+    ```
+
+2.  **Set FLASK_APP Environment Variable**: The Flask CLI needs to know where your application instance is. Set this variable in your terminal session before running the worker.
+    *   For Linux/macOS (bash/zsh):
+        ```bash
+        export FLASK_APP=flask_nocobase_importer.app
+        ```
+    *   For Windows (Command Prompt):
+        ```bash
+        set FLASK_APP=flask_nocobase_importer.app
+        ```
+    *   For Windows (PowerShell):
+        ```powershell
+        $env:FLASK_APP="flask_nocobase_importer.app"
+        ```
+    You must set this from the project root directory (the directory containing the `flask_nocobase_importer` folder and your `.env` file).
+
+3.  **Ensure `.env` File is Present**: The worker tasks may need database credentials or other configurations defined in your `.env` file. Make sure your `.env` file (copied from `.env.example` and configured) is present in the current working directory (project root) when you start the worker.
+
+4.  **Ensure Redis is Running**: The RQ worker needs to connect to a Redis server. Make sure your Redis server is running and accessible at the URL specified in your `REDIS_URL` environment variable (default is `redis://localhost:6379/0` if not set).
+
+5.  **Start the Worker**: From your project root directory, run the following command:
+    ```bash
+    python -m flask rq worker -u ${REDIS_URL:-redis://localhost:6379/0} default
+    ```
+    Or, if `FLASK_APP` is correctly set and your environment resolves the `flask` command directly:
+    ```bash
+    flask rq worker -u ${REDIS_URL:-redis://localhost:6379/0} default
+    ```
+    This command tells the worker to connect to your Redis instance (using the `REDIS_URL` from your environment or defaulting to `redis://localhost:6379/0`) and process jobs on the `default` queue. You can list multiple queues if needed.
+
+**Troubleshooting Worker Startup:**
+*   **`Error: Could not locate a Flask application.`**: This usually means `FLASK_APP` is not set correctly or you are not in the project root directory. Verify the variable and your current path.
+*   **`Error: No such command 'rq'.`**: This typically means the virtual environment isn't activated, `Flask-RQ2` is not installed properly, or there's an issue with your Python environment's PATH. Ensure `pip install -r requirements.txt` was successful.
+*   **Connection Errors to Redis**: Ensure Redis is running and accessible.
+
+Using `python -m flask ...` can sometimes be more reliable than just `flask ...` if you have multiple Python versions or complex environments.
 
 ### Deployment with Portainer
 
