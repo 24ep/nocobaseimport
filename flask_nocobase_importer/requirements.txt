@@ -10,4 +10,4 @@ Flask-RQ2
 redis
 minio
 Flask-WTF
-rq<1.0
+rq=1.13.0
