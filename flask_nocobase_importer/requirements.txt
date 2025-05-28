@@ -9,3 +9,4 @@ Flask-Talisman
 Flask-RQ2
 redis
 minio
+Flask-WTF
