@@ -160,13 +160,13 @@ While Docker Compose (`docker-compose up`) is the recommended way to run all ser
 
 5.  **Start the Worker**: From your project root directory, run the following command:
     ```bash
-    python -m flask rq worker -u ${REDIS_URL:-redis://localhost:6379/0} default
+    python -m flask rq worker default
     ```
     Or, if `FLASK_APP` is correctly set and your environment resolves the `flask` command directly:
     ```bash
-    flask rq worker -u ${REDIS_URL:-redis://localhost:6379/0} default
+    flask rq worker default
     ```
-    This command tells the worker to connect to your Redis instance (using the `REDIS_URL` from your environment or defaulting to `redis://localhost:6379/0`) and process jobs on the `default` queue. You can list multiple queues if needed.
+    This command tells the worker to process jobs on the `default` queue (you can list multiple queues if needed). The worker will connect to your Redis instance using the `REDIS_URL` environment variable defined in your shell or `.env` file (which is loaded by Flask). Ensure `REDIS_URL` is set correctly (e.g., `export REDIS_URL=redis://localhost:6379/0`).
 
 **Troubleshooting Worker Startup:**
 *   **`Error: Could not locate a Flask application.`** or **`Error: No such command 'rq'.`**: 
